@@ -409,7 +409,7 @@ static bool relative_mode = false;
 volatile bool wait_for_heatup = true;
 
 // For M0/M1, this flag may be cleared (by M108) to exit the wait-for-user loop
-#if ENABLED(EMERGENCY_PARSER) && DISABLED(ULTIPANEL)
+#if ENABLED(EMERGENCY_PARSER) || ENABLED(ULTIPANEL)
   volatile bool wait_for_user = false;
 #endif
 
@@ -4390,7 +4390,7 @@ inline void gcode_G92() {
   report_current_position();
 }
 
-#if ENABLED(ULTIPANEL) || ENABLED(EMERGENCY_PARSER)
+#if ENABLED(EMERGENCY_PARSER) || ENABLED(ULTIPANEL)
 
   /**
    * M0: Unconditional stop - Wait for user button press on LCD
@@ -4431,32 +4431,36 @@ inline void gcode_G92() {
 
     #endif
 
+    #if ENABLED(EMERGENCY_PARSER)
+      wait_for_user = true;
+    #endif
+
+    KEEPALIVE_STATE(PAUSED_FOR_USER);
+
     stepper.synchronize();
     refresh_cmd_timeout();
 
     #if ENABLED(ULTIPANEL)
 
+      #if ENABLED(EMERGENCY_PARSER)
+        #define M1_WAIT_CONDITION (!lcd_clicked() && wait_for_user)
+      #else
+        #define M1_WAIT_CONDITION !lcd_clicked()
+      #endif
+
       if (codenum > 0) {
         codenum += previous_cmd_ms;  // wait until this time for a click
-        KEEPALIVE_STATE(PAUSED_FOR_USER);
-        while (PENDING(millis(), codenum) && !lcd_clicked()) idle();
+        while (PENDING(millis(), codenum) && M1_WAIT_CONDITION) idle();
         lcd_ignore_click(false);
       }
       else if (lcd_detected()) {
-        KEEPALIVE_STATE(PAUSED_FOR_USER);
-        while (!lcd_clicked()) idle();
+        while (M1_WAIT_CONDITION) idle();
       }
-      else return;
+      else goto ExitM1;
 
-      if (IS_SD_PRINTING)
-        LCD_MESSAGEPGM(MSG_RESUMING);
-      else
-        LCD_MESSAGEPGM(WELCOME_MSG);
+      IS_SD_PRINTING ? LCD_MESSAGEPGM(MSG_RESUMING) : LCD_MESSAGEPGM(WELCOME_MSG);
 
     #else
-
-      KEEPALIVE_STATE(PAUSED_FOR_USER);
-      wait_for_user = true;
 
       if (codenum > 0) {
         codenum += previous_cmd_ms;  // wait until this time for an M108
@@ -4464,14 +4468,20 @@ inline void gcode_G92() {
       }
       else while (wait_for_user) idle();
 
-      wait_for_user = false;
+    #endif
 
+#if ENABLED(ULTIPANEL)
+  ExitM1:
+#endif
+
+    #if ENABLED(EMERGENCY_PARSER)
+      wait_for_user = false;
     #endif
 
     KEEPALIVE_STATE(IN_HANDLER);
   }
 
-#endif // ULTIPANEL || EMERGENCY_PARSER
+#endif // EMERGENCY_PARSER || ULTIPANEL
 
 /**
  * M17: Enable power on all stepper motors
@@ -4713,7 +4723,7 @@ inline void gcode_M42() {
           pin_state[pin - first_pin] = digitalRead(pin);
       }
 
-      #if ENABLED(EMERGENCY_PARSER) && DISABLED(ULTIPANEL)
+      #if ENABLED(EMERGENCY_PARSER) || ENABLED(ULTIPANEL)
         wait_for_user = true;
       #endif
 
@@ -4731,7 +4741,7 @@ inline void gcode_M42() {
           }
         }
 
-        #if ENABLED(EMERGENCY_PARSER) && DISABLED(ULTIPANEL)
+        #if ENABLED(EMERGENCY_PARSER) || ENABLED(ULTIPANEL)
           if (!wait_for_user) break;
         #endif
 
@@ -8302,15 +8312,17 @@ void ok_to_send() {
     float ratio_x = x / bilinear_grid_spacing[X_AXIS],
           ratio_y = y / bilinear_grid_spacing[Y_AXIS];
 
-    // Whole unit is the grid box index
-    const int gridx = constrain(floor(ratio_x), 0, ABL_GRID_POINTS_X - 2),
-              gridy = constrain(floor(ratio_y), 0, ABL_GRID_POINTS_Y - 2),
-              nextx = gridx + (x < PROBE_BED_WIDTH ? 1 : 0),
-              nexty = gridy + (y < PROBE_BED_HEIGHT ? 1 : 0);
+    // Whole units for the grid line indices. Constrained within bounds.
+    const int gridx = constrain(floor(ratio_x), 0, ABL_GRID_POINTS_X - 1),
+              gridy = constrain(floor(ratio_y), 0, ABL_GRID_POINTS_Y - 1),
+              nextx = min(gridx + 1, ABL_GRID_POINTS_X - 1),
+              nexty = min(gridy + 1, ABL_GRID_POINTS_Y - 1);
 
     // Subtract whole to get the ratio within the grid box
-    ratio_x = constrain(ratio_x - gridx, 0.0, 1.0);
-    ratio_y = constrain(ratio_y - gridy, 0.0, 1.0);
+    ratio_x -= gridx; ratio_y -= gridy;
+
+    // Never less than 0.0. (Over 1.0 is fine due to previous contraints.)
+    NOLESS(ratio_x, 0); NOLESS(ratio_y, 0);
 
     // Z at the box corners
     const float z1 = bed_level_grid[gridx][gridy],  // left-front
