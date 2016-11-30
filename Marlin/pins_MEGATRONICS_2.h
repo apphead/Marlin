@@ -43,9 +43,14 @@
 #define Y_MIN_PIN 41
 #define Y_MAX_PIN 38
 
-#define Z_STEP_PIN 56 // A2
-#define Z_DIR_PIN 60 // A6
-#define Z_ENABLE_PIN 55 // A1
+//#define Z_STEP_PIN 56 // A2
+//#define Z_DIR_PIN 60 // A6
+//#define Z_ENABLE_PIN 55 // A1
+//Experimental Claude
+//Replace faulty Z Pins with unused E2
+#define Z_STEP_PIN 23
+#define Z_DIR_PIN 24
+#define Z_ENABLE_PIN 22
 #define Z_MIN_PIN 18
 #define Z_MAX_PIN 19
 
@@ -57,9 +62,9 @@
 #define E1_DIR_PIN 39
 #define E1_ENABLE_PIN 28
 
-#define E2_STEP_PIN 23
-#define E2_DIR_PIN 24
-#define E2_ENABLE_PIN 22
+//#define E2_STEP_PIN 23
+//#define E2_DIR_PIN 24
+//#define E2_ENABLE_PIN 22
 
 #define SDSS 53
 #define LED_PIN 13
