@@ -114,4 +114,11 @@ applet/
 # Debug files
 *.dSYM/
 *.su
+<<<<<<< HEAD
 Marlin/Configuration.h
+=======
+
+#PlatformIO files/dirs
+.pioenvs
+.piolib
+>>>>>>> upstream/RC
